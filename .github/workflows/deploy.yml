@@ -1,0 +1,37 @@
+name: Deploy to DigitalOcean
+
+# Deploys the App Platform spec. Runs only on main (production) and on manual
+# dispatch, so feature-branch pushes never deploy. No-ops safely until the repo
+# secrets DIGITALOCEAN_ACCESS_TOKEN and DIGITALOCEAN_APP_ID are configured.
+#
+# One-time bootstrap (creates the app and prints its id):
+#   doctl apps create --spec .do/app.yaml
+# then add that id as the DIGITALOCEAN_APP_ID repo secret.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: App Platform deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+      - name: Deploy app spec
+        env:
+          APP_ID: ${{ secrets.DIGITALOCEAN_APP_ID }}
+        run: |
+          if [ -z "$APP_ID" ]; then
+            echo "::warning::DIGITALOCEAN_APP_ID not set; skipping deploy."
+            echo "One-time: doctl apps create --spec .do/app.yaml, then add the id as a repo secret."
+            exit 0
+          fi
+          doctl apps update "$APP_ID" --spec .do/app.yaml --wait

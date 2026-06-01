@@ -25,46 +25,46 @@ requirements. See the build spec for the full rationale; this plan does not re-l
 | D3 | UI serving | **Same-origin**: FastAPI serves the built SPA bundle | No CORS, single Basic-auth boundary. Alternative (DO Static Site + cross-origin token auth) noted but not chosen. |
 | D4 | MCP server | **Remote on DO**, over **HTTP** (Streamable HTTP transport), bearer-token auth | Per spec's open question; user chose remote. |
 | D5 | Component consolidation | Debug UI API + MCP HTTP + `/health` share **one Web Service** | Two routers, different auth. Avoids paying for two always-on instances on a single-user budget. |
-| D6 | Scheduling | **Deferred** — designed as a swappable trigger | Default APScheduler-in-worker; external trigger (GitHub Actions / DO Function) is a thin swap. Locked at deploy step. |
+| D6 | Scheduling / execution | **GitHub Actions cron — no DO worker** | ~$60/yr saved vs. an always-on worker; short-run model fits the async batch lifecycle. Cost: managed Postgres must accept external SSL connections (`verify-full` + strong creds). Re-trigger buttons use `workflow_dispatch`. |
 | D7 | Live external verification | **Blocked in this environment** | Session network policy denies `*.ietf.org` (`403 host_not_allowed`). Clients coded against documented formats; real-archive validation happens at DO runtime / locally. |
+| D8 | Quality gates | **Lint + type-check + test, enforced in CI** | Python: ruff + mypy (strict) + pytest. Frontend: eslint + tsc + vitest. Blocks merges. |
 
 ## 3. Architecture — DigitalOcean App Platform
 
 ```
-                          ┌─────────────────────────────────────────┐
-                          │        DO App Platform (one App)          │
-                          │                                           │
-  Claude Desktop/Code ───▶│  ┌─────────────┐   MCP-over-HTTP (bearer) │
-  (MCP client)            │  │             │                         │
-                          │  │  api        │   /mcp        ─┐         │
-  Browser (you) ─────────▶│  │  Web Service│   /api/*  ────┼─ Basic  │
-                          │  │  (FastAPI)  │   / (SPA)  ───┘  auth    │
-                          │  │             │   /health (open)        │
-                          │  └──────┬──────┘                         │
-                          │         │                                │
-                          │  ┌──────▼──────┐   reads/writes          │
-                          │  │  worker     │   - APScheduler loop    │
-                          │  │  (Worker)   │   - batch submit/poll   │
-                          │  └──────┬──────┘   - ingestion+pipeline  │
-                          │         │                                │
-                          │  ┌──────▼──────┐                         │
-                          │  │  db         │   Managed PostgreSQL    │
-                          │  └─────────────┘                         │
-                          │                                           │
-                          │  migrate (Job, PRE_DEPLOY): alembic upgrade│
-                          └─────────────────────────────────────────┘
-                                    │ outbound (runtime only)
-                                    ▼
-                  mailarchive.ietf.org  +  datatracker.ietf.org
+  GitHub Actions                         DO App Platform (one App)
+  --------------                         -------------------------
+  pipeline.yml                           [ api  (FastAPI Web Service) ]
+    cron: ingest (weekly)                  /        -> React SPA  (Basic auth)
+    cron: poll  (3-hourly)     SSL         /api/*   -> UI JSON API (Basic auth)
+    workflow_dispatch          verify-full /mcp     -> MCP-over-HTTP (bearer)
+        |                  +--------------> /health -> open
+        | reads/writes     |                   |
+        v                  |              [ db: managed PostgreSQL ]
+  (Anthropic Batch API)    |              [ migrate: PRE_DEPLOY job, alembic ]
+                           |
+  ci.yml  -> lint/type/test
+  deploy.yml -> doctl apps update --spec .do/app.yaml  (push to main)
+
+  UI "re-trigger" buttons call workflow_dispatch (api holds GITHUB_DISPATCH_TOKEN).
+  Runtime outbound -> mailarchive.ietf.org + datatracker.ietf.org
 ```
 
 | Component | App Platform type | Responsibility |
 |-----------|-------------------|----------------|
 | `api` | Web Service | Serves React SPA (static), JSON API for the UI, MCP-over-HTTP, `/health`. |
-| `worker` | Worker | Pipeline orchestration: ingestion, cleaning, draft sync, batch submit/poll, summarization, categorization. Houses the scheduler. |
 | `migrate` | Job (PRE_DEPLOY) | `alembic upgrade head` before each deploy. |
-| `db` | Managed Postgres | All storage. |
+| `db` | Managed Postgres | All storage. Accepts external SSL connections for the GitHub Actions pipeline (D6). |
 | `web` (SPA) | *(folded into `api`)* | Built bundle copied into `api` image; not a separate component (D3/D5). |
+| ~~`worker`~~ | *(removed)* | Pipeline execution moved to **GitHub Actions** (D6); no always-on worker. |
+
+**Pipeline execution (GitHub Actions, D6):**
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `ci.yml` | PR + push | ruff / mypy / pytest (and eslint / tsc / vitest once the SPA exists). |
+| `deploy.yml` | push to `main` + manual | `doctl apps update --spec .do/app.yaml`. No-ops until DO secrets set. |
+| `pipeline.yml` | cron (weekly ingest + 3-hourly poll) + `workflow_dispatch` | Runs `wgtracker pipeline <stage>` against the DB. `workflow_dispatch` is how the UI re-trigger buttons drive it. |
 
 ## 4. Tech stack
 
@@ -215,7 +215,9 @@ WG/topic/date/status) → thread detail (summary, key positions, consensus state
 participants, referenced drafts, **source link**), draft list/detail, cost-by-stage,
 processing log/errors. Re-trigger actions (ingest / summarize / recategorize) **enqueue**
 work (write a `batch_jobs`/log row) for the worker to pick up — they don't block the HTTP
-request, consistent with async batch. Served same-origin behind Basic auth (D3).
+request, consistent with async batch. The re-trigger action fires a GitHub
+`workflow_dispatch` against `pipeline.yml` (the same workflow cron uses), so on-demand and
+scheduled runs share one code path. Served same-origin behind Basic auth (D3).
 
 ## 11. MCP server (remote HTTP)
 
@@ -230,14 +232,24 @@ wrappers over the shared `queries.py` layer (same code path as the CLI and UI).
 - `config.yaml` (non-secret): `working_groups`, `topics` (name/description/keywords),
   `llm` (model ids, `use_batch_api`), `processing` (thresholds, flags), `drafts`
   (datatracker base, refresh policy). Editable; topic changes trigger recategorization.
-- **Env** (DO App Platform): `DATABASE_URL`, `ANTHROPIC_API_KEY`, `CONFIG_PATH`,
-  `LOG_LEVEL`, plus `UI_BASIC_AUTH_USER`/`UI_BASIC_AUTH_PASS` and `MCP_BEARER_TOKEN`
-  (auth, added for the remote-exposure decisions D2/D4), and `COST_CEILING_USD`.
+- **Env** (DO App Platform, set in `.do/app.yaml`): `DATABASE_URL` (bound to the managed
+  db via `${db.DATABASE_URL}`, in-VPC), `ANTHROPIC_API_KEY`, `CONFIG_PATH`, `LOG_LEVEL`,
+  `UI_BASIC_AUTH_USER`/`UI_BASIC_AUTH_PASS`, `MCP_BEARER_TOKEN` (auth for D2/D4),
+  `GITHUB_DISPATCH_TOKEN` + `GITHUB_REPO` (UI re-trigger → workflow_dispatch), and
+  `COST_CEILING_USD`.
+- **GitHub repo secrets** (for the Actions pipeline, D6): `DATABASE_URL` — the **public**
+  connection string with `sslmode=verify-full` (distinct from the in-VPC binding above) —
+  `ANTHROPIC_API_KEY`, `DIGITALOCEAN_ACCESS_TOKEN`, and `DIGITALOCEAN_APP_ID`.
 
 ## 13. Build milestones
 
+**Milestone 0 — deployment & CI scaffolding (done):** Python skeleton + `wgtracker`
+CLI stub; CI quality gates (ruff + mypy-strict + pytest, green locally); GitHub Actions
+`deploy.yml` (DO App Platform via `doctl`) and `pipeline.yml` (cron + workflow_dispatch);
+`.do/app.yaml` (no worker); multi-stage `Dockerfile` target; `config.yaml`.
+
 **Milestone 1 — verifiable, zero API cost** (stop for your spot-check):
-1. Scaffold (pyproject, config loader, structlog, settings).
+1. Scaffold (pyproject, config loader, structlog, settings). *(partially done in M0)*
 2. Schema + Alembic migrations (all tables + `batch_jobs`).
 3. Ingestion: mbox export client + RFC 5322/MIME parse + dedupe.
 4. Thread reconstruction (+ heuristic fallback).
@@ -255,19 +267,21 @@ wrappers over the shared `queries.py` layer (same code path as the CLI and UI).
 → **You spot-check** summaries on a small MLS sample (accuracy, citations, categorization, cost vs. estimate).
 
 11. MCP HTTP server (7 tools, source URLs always).
-12. React SPA debug UI (read + re-trigger).
-13. Dockerfile (multi-stage) + `.do/app.yaml` + lock scheduling mechanism (D6).
+12. React SPA debug UI (read + re-trigger) — activates the `frontend` CI job.
+13. Wire `wgtracker pipeline` stages to real logic; first DO deploy (set DO + GitHub secrets).
 14. Deploy to DO App Platform; validate small sample end-to-end.
 15. Full backfill of configured WGs (only after validation; within budget).
 
 ## 14. Open questions / risks
 
-1. **Scheduling mechanism (D6)** — confirm APScheduler-in-worker vs. external trigger at step 13.
-2. **mbox export incremental fetch** — whether the export endpoint supports server-side
+1. **mbox export incremental fetch** — whether the export endpoint supports server-side
    date filtering, or we always fetch + dedupe. Resolved at runtime validation (D7).
-3. **Datatracker field mapping** — exact field names for state/RFC-number; verified at
+2. **Datatracker field mapping** — exact field names for state/RFC-number; verified at
    runtime, with defensive parsing meanwhile.
-4. **Budget guardrail behavior** — confirm the worker should hard-stop at `COST_CEILING_USD`
-   and require an explicit override to continue.
-5. **DB connection limits** — managed Postgres connection caps vs. worker + api concurrency;
-   may need a pooler (PgBouncer / SQLAlchemy pool tuning) at deploy.
+3. **Budget guardrail behavior** — confirm the pipeline job should hard-stop at
+   `COST_CEILING_USD` and require an explicit override to continue.
+4. **DB connection exposure & limits (D6)** — managed Postgres now accepts external SSL
+   connections for the Actions runner; confirm `verify-full` + a dedicated least-privilege
+   role, and watch connection caps vs. `api` concurrency (may need pool tuning / PgBouncer).
+5. **Scheduled-workflow auto-disable** — GitHub disables crons after 60 days of repo
+   inactivity; a trivial keepalive or awareness needed for a low-traffic repo.
