@@ -75,7 +75,11 @@ jobs:
         value: ${db.DATABASE_URL}
 
 databases:
+  # A standalone managed Postgres cluster (NOT an embedded dev DB) so the
+  # GitHub Actions pipeline can reach it externally over SSL (see DEPLOY.md).
+  # Create the cluster first, then reference it here by name.
   - name: db
     engine: PG
     version: "16"
-    production: false
+    production: true
+    cluster_name: wg-activity-db
