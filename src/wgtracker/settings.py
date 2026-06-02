@@ -15,7 +15,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Process settings read from the environment."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
 
     # Defaults to a local SQLite file so the tool runs end-to-end offline for
     # development and the Milestone 1 spot-check. Production sets a Postgres URL.
@@ -24,6 +24,15 @@ class Settings(BaseSettings):
     config_path: str = Field(default="config.yaml", alias="CONFIG_PATH")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     cost_ceiling_usd: float = Field(default=200.0, alias="COST_CEILING_USD")
+
+    # Debug UI / MCP exposure (set on App Platform; empty => auth disabled for local dev).
+    ui_basic_auth_user: str | None = Field(default=None, alias="UI_BASIC_AUTH_USER")
+    ui_basic_auth_pass: str | None = Field(default=None, alias="UI_BASIC_AUTH_PASS")
+    mcp_bearer_token: str | None = Field(default=None, alias="MCP_BEARER_TOKEN")
+
+    # Lets the UI's re-trigger buttons dispatch the pipeline workflow.
+    github_dispatch_token: str | None = Field(default=None, alias="GITHUB_DISPATCH_TOKEN")
+    github_repo: str | None = Field(default=None, alias="GITHUB_REPO")
 
 
 @lru_cache(maxsize=1)
