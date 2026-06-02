@@ -118,7 +118,10 @@ def ingest_mbox(
         thread.message_count = rt.message_count
         thread.archive_url = rt.archive_url
         thread.participants = rt.participants
-        thread.status = rt.status
+        # Don't clobber an LLM-assigned status once a thread has been summarized;
+        # before that, derive active/concluded from activity age.
+        if thread.last_processed is None:
+            thread.status = rt.status
     session.flush()
 
     # Assign each message to its thread now that the thread rows exist (FK-safe).

@@ -16,3 +16,6 @@ frontend/dist/
 # Local env
 .env
 *.local
+
+# Local dev SQLite databases
+*.db

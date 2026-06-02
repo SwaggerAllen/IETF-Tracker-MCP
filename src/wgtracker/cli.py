@@ -209,6 +209,21 @@ def show_draft_cmd(ctx: click.Context, draft_name: str) -> None:
             click.echo(f"  {t.thread_id}  {t.subject}")
 
 
+@main.command("cost")
+@click.pass_context
+def cost_cmd(ctx: click.Context) -> None:
+    """Show total LLM spend, broken down by stage."""
+    from wgtracker.llm.cost import spend_by_stage, total_spend
+
+    settings: Settings = ctx.obj["settings"]
+    with session_scope(ctx.obj["factory"]) as session:
+        total = total_spend(session)
+        by_stage = spend_by_stage(session)
+    click.echo(f"Total spend: ${total:.4f}  (ceiling ${settings.cost_ceiling_usd:.2f})")
+    for stage, amount in sorted(by_stage.items()):
+        click.echo(f"  {stage:<14} ${amount:.4f}")
+
+
 @main.group()
 def pipeline() -> None:
     """Run pipeline stages (invoked by the scheduled GitHub Actions workflow)."""
@@ -216,9 +231,10 @@ def pipeline() -> None:
 
 @pipeline.command("ingest")
 @click.option("--fetch-drafts/--no-fetch-drafts", default=True)
+@click.option("--summarize/--no-summarize", "do_summarize", default=True)
 @click.pass_context
-def pipeline_ingest(ctx: click.Context, fetch_drafts: bool) -> None:
-    """Fetch + ingest all configured working groups from the IETF archive."""
+def pipeline_ingest(ctx: click.Context, fetch_drafts: bool, do_summarize: bool) -> None:
+    """Fetch + ingest all configured working groups, then submit summarization."""
     settings: Settings = ctx.obj["settings"]
     config = load_config(settings.config_path)
     client = _draft_client(config, settings, fetch_drafts)
@@ -239,17 +255,62 @@ def pipeline_ingest(ctx: click.Context, fetch_drafts: bool) -> None:
             )
         log.info("pipeline_ingest_wg", working_group=wg.name, **vars(result))
 
+    if do_summarize:
+        from wgtracker.llm.batch import AnthropicBatchClient
+        from wgtracker.llm.runner import submit_summarization
+
+        with session_scope(ctx.obj["factory"]) as session:
+            job = submit_summarization(
+                session, AnthropicBatchClient(), config, ceiling=settings.cost_ceiling_usd
+            )
+        if job is None:
+            click.echo("No threads to summarize (or budget ceiling reached).")
+        else:
+            click.echo(f"Submitted summarization batch {job.batch_id} ({job.item_count} threads).")
+
 
 @pipeline.command("poll")
-def pipeline_poll() -> None:
-    """Poll and retrieve completed Anthropic batches; write results."""
-    click.echo("pipeline poll: not yet implemented (Milestone 2)")
+@click.pass_context
+def pipeline_poll(ctx: click.Context) -> None:
+    """Poll completed Anthropic batches, apply results, submit follow-on stages."""
+    from wgtracker.llm.batch import AnthropicBatchClient
+    from wgtracker.llm.runner import poll_batches
+
+    settings: Settings = ctx.obj["settings"]
+    config = load_config(settings.config_path)
+    with session_scope(ctx.obj["factory"]) as session:
+        report = poll_batches(
+            session, AnthropicBatchClient(), config, ceiling=settings.cost_ceiling_usd
+        )
+    click.echo(
+        f"Retrieved {report.batches_retrieved} batches: "
+        f"{report.summaries_applied} summaries, {report.categories_applied} categories, "
+        f"${report.cost_usd:.4f}."
+    )
 
 
 @pipeline.command("recategorize")
-def pipeline_recategorize() -> None:
-    """Re-categorize threads against the current topic taxonomy."""
-    click.echo("pipeline recategorize: not yet implemented (Milestone 2)")
+@click.pass_context
+def pipeline_recategorize(ctx: click.Context) -> None:
+    """Re-categorize all summarized threads against the current taxonomy."""
+    from wgtracker.llm.batch import AnthropicBatchClient
+    from wgtracker.llm.runner import submit_categorization
+
+    settings: Settings = ctx.obj["settings"]
+    config = load_config(settings.config_path)
+    with session_scope(ctx.obj["factory"]) as session:
+        job = submit_categorization(
+            session,
+            AnthropicBatchClient(),
+            config,
+            ceiling=settings.cost_ceiling_usd,
+            override=True,  # recategorization is cheap; don't block on the summary budget
+            recategorize=True,
+        )
+    if job is None:
+        click.echo("No summarized threads to categorize.")
+    else:
+        click.echo(f"Submitted categorization batch {job.batch_id} ({job.item_count} threads).")
 
 
 if __name__ == "__main__":
