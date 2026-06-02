@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+dist/
+build/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+
+# Local env
+.env
+*.local
+
+# Local dev SQLite databases
+*.db

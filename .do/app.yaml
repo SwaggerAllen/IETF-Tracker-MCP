@@ -1,0 +1,85 @@
+# DigitalOcean App Platform spec.
+#
+# Components: api (Web Service: debug UI + MCP-over-HTTP + /health), a PRE_DEPLOY
+# migration job, and a managed Postgres database. There is no worker — the
+# pipeline runs in GitHub Actions (see .github/workflows/pipeline.yml).
+#
+# Secret env values (type: SECRET) must be set in the App Platform dashboard or
+# via `doctl apps update`. DATABASE_URL is bound to the managed db component
+# automatically via ${db.DATABASE_URL} (the in-VPC connection). GitHub Actions
+# uses the DB's public connection string instead, stored as a repo secret.
+
+name: wg-activity-tracker
+region: nyc
+
+services:
+  - name: api
+    dockerfile_path: Dockerfile
+    source_dir: /
+    github:
+      repo: SwaggerAllen/IETF-Tracker-MCP
+      branch: main
+      deploy_on_push: true
+    http_port: 8080
+    instance_size_slug: basic-xxs
+    instance_count: 1
+    health_check:
+      http_path: /health
+      initial_delay_seconds: 20
+      period_seconds: 15
+    routes:
+      - path: /
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+      - key: ANTHROPIC_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: CONFIG_PATH
+        scope: RUN_TIME
+        value: /app/config.yaml
+      - key: LOG_LEVEL
+        scope: RUN_TIME
+        value: INFO
+      - key: UI_BASIC_AUTH_USER
+        scope: RUN_TIME
+        type: SECRET
+      - key: UI_BASIC_AUTH_PASS
+        scope: RUN_TIME
+        type: SECRET
+      - key: MCP_BEARER_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+      # Lets the UI's re-trigger buttons dispatch the pipeline workflow.
+      - key: GITHUB_DISPATCH_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+      - key: GITHUB_REPO
+        scope: RUN_TIME
+        value: SwaggerAllen/IETF-Tracker-MCP
+
+jobs:
+  - name: migrate
+    kind: PRE_DEPLOY
+    dockerfile_path: Dockerfile
+    source_dir: /
+    github:
+      repo: SwaggerAllen/IETF-Tracker-MCP
+      branch: main
+    instance_size_slug: basic-xxs
+    run_command: alembic upgrade head
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+
+databases:
+  # A standalone managed Postgres cluster (NOT an embedded dev DB) so the
+  # GitHub Actions pipeline can reach it externally over SSL (see DEPLOY.md).
+  # Create the cluster first, then reference it here by name.
+  - name: db
+    engine: PG
+    version: "16"
+    production: true
+    cluster_name: wg-activity-db

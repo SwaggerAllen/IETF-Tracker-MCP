@@ -1,0 +1,67 @@
+# Application configuration (non-secret). Secrets come from environment
+# variables (DATABASE_URL, ANTHROPIC_API_KEY) for App Platform compatibility.
+
+working_groups:
+  - name: mls
+    archive_url: https://mailarchive.ietf.org/arch/list/mls/
+  - name: mimi
+    archive_url: https://mailarchive.ietf.org/arch/list/mimi/
+  - name: cfrg
+    archive_url: https://mailarchive.ietf.org/arch/list/cfrg/
+
+topics:
+  - name: federation
+    description: Cross-server / cross-instance protocol design
+    keywords: [federation, federated, cross-server, cross-instance, interop]
+  - name: archival_and_recovery
+    description: Long-term message retention, key recovery, history sharing
+    keywords: [archival, recovery, retention, history, key escrow]
+  - name: multi_device
+    description: Multiple devices per identity, device add/remove
+    keywords: [multi-device, multidevice, device, client sync]
+  - name: history_sharing
+    description: Sharing past messages with new or rejoining members
+    keywords: [history sharing, history, backfill, catch-up]
+  - name: post_quantum
+    description: Post-quantum cryptography and hybrid schemes
+    keywords: [post-quantum, pq, pqc, hybrid, kyber, ml-kem]
+  - name: sender_keys
+    description: Sender key schemes and large-group efficiency
+    keywords: [sender keys, sender key, large group]
+  - name: extensions
+    description: Protocol extensions and extensibility mechanisms
+    keywords: [extension, extensions, extensibility]
+  - name: moderation_and_abuse_reporting
+    description: Moderation, abuse reporting, content reporting
+    keywords: [moderation, abuse, reporting, franking]
+  - name: threshold_signatures
+    description: Threshold and multi-party signatures
+    keywords: [threshold, multi-party, mpc signatures]
+  - name: key_packages
+    description: KeyPackages, their lifecycle and validation
+    keywords: [keypackage, key package, key packages]
+  - name: delivery_service
+    description: Delivery Service design and semantics
+    keywords: [delivery service, ds, delivery]
+  - name: authentication_service
+    description: Authentication Service design and semantics
+    keywords: [authentication service, as, auth service]
+  - name: credentials
+    description: Credentials, identity binding, and verification
+    keywords: [credential, credentials, identity, x509, verifiable]
+
+llm:
+  model_summarization: claude-sonnet-4-6
+  model_categorization: claude-haiku-4-5
+  use_batch_api: true
+
+processing:
+  active_threshold_days: 90       # no activity in N days => "concluded"
+  reprocess_on_new_messages: true
+  pre_filter_admin_messages: true
+  draft_metadata_refresh_days: 30 # refresh active draft metadata older than this
+
+drafts:
+  datatracker_api_base: https://datatracker.ietf.org/api/v1/
+  fetch_metadata_on_first_reference: true
+  weekly_refresh_active_drafts: true

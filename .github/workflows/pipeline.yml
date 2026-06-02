@@ -1,0 +1,56 @@
+name: Pipeline
+
+# Executes the ingestion/processing pipeline in GitHub Actions (no always-on
+# worker). Scheduled crons only fire from the default branch (main). The same
+# job is reachable on-demand via workflow_dispatch, which is how the debug UI's
+# "re-trigger" buttons drive it.
+#
+# Required repo secrets: DATABASE_URL (public connection string, sslmode=require),
+# ANTHROPIC_API_KEY.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"    # weekly ingest + batch submit — Mondays 06:00 UTC
+    - cron: "0 */3 * * *"  # poll/retrieve completed batches — every 3h
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: Pipeline stage to run
+        type: choice
+        options: [ingest, poll, recategorize]
+        default: ingest
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pipeline
+  cancel-in-progress: false
+
+jobs:
+  run:
+    name: Run pipeline stage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e .
+      - name: Determine stage
+        id: s
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "stage=${{ inputs.stage }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 6 * * 1" ]; then
+            echo "stage=ingest" >> "$GITHUB_OUTPUT"
+          else
+            echo "stage=poll" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Run pipeline
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CONFIG_PATH: ${{ github.workspace }}/config.yaml
+          LOG_LEVEL: INFO
+        run: wgtracker pipeline "${{ steps.s.outputs.stage }}"
