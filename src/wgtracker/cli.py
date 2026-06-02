@@ -8,6 +8,7 @@ holds the entry points invoked by the scheduled GitHub Actions workflow.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import cast
 
 import click
 
@@ -99,7 +100,23 @@ def ingest(
     )
 
 
+def _print_threads(rows: list[object]) -> None:
+    from wgtracker.db.models import Thread
+
+    if not rows:
+        click.echo("No threads found.")
+        return
+    for t in rows:
+        assert isinstance(t, Thread)
+        last = t.last_activity_date.date().isoformat() if t.last_activity_date else "?"
+        click.echo(
+            f"{t.thread_id}  [{t.working_group}] {last}  "
+            f"({t.message_count} msgs, {t.status.value})  {t.subject}"
+        )
+
+
 @main.command("threads")
+@click.option("--topic", "-t")
 @click.option("--working-group", "-w")
 @click.option("--since", help="ISO date lower bound on last activity.")
 @click.option("--until", help="ISO date upper bound on last activity.")
@@ -109,6 +126,7 @@ def ingest(
 @click.pass_context
 def list_threads_cmd(
     ctx: click.Context,
+    topic: str | None,
     working_group: str | None,
     since: str | None,
     until: str | None,
@@ -122,6 +140,7 @@ def list_threads_cmd(
     with session_scope(ctx.obj["factory"]) as session:
         rows = list_threads(
             session,
+            topic=topic,
             working_group=working_group,
             since=_parse_date(since),
             until=_parse_date(until),
@@ -129,15 +148,63 @@ def list_threads_cmd(
             subject_contains=subject,
             limit=limit,
         )
+        _print_threads(list(rows))
+
+
+@main.command("recent")
+@click.option("--topic", "-t")
+@click.option("--working-group", "-w")
+@click.option("--days", default=30, show_default=True)
+@click.option("--limit", default=50, show_default=True)
+@click.pass_context
+def recent_cmd(
+    ctx: click.Context, topic: str | None, working_group: str | None, days: int, limit: int
+) -> None:
+    """Recent activity in a topic / working group."""
+    from wgtracker.queries import recent_activity
+
+    with session_scope(ctx.obj["factory"]) as session:
+        rows = recent_activity(
+            session, topic=topic, working_group=working_group, days=days, limit=limit
+        )
+        _print_threads(list(rows))
+
+
+@main.command("participants")
+@click.option("--topic", "-t")
+@click.option("--working-group", "-w")
+@click.option("--limit", default=25, show_default=True)
+@click.pass_context
+def participants_cmd(
+    ctx: click.Context, topic: str | None, working_group: str | None, limit: int
+) -> None:
+    """Most active participants in a topic / working group."""
+    from wgtracker.queries import participants
+
+    with session_scope(ctx.obj["factory"]) as session:
+        rows = participants(session, topic=topic, working_group=working_group, limit=limit)
         if not rows:
-            click.echo("No threads found.")
+            click.echo("No participants found.")
             return
-        for t in rows:
-            last = t.last_activity_date.date().isoformat() if t.last_activity_date else "?"
-            click.echo(
-                f"{t.thread_id}  [{t.working_group}] {last}  "
-                f"({t.message_count} msgs, {t.status.value})  {t.subject}"
-            )
+        for addr, count in rows:
+            click.echo(f"{count:>5}  {addr}")
+
+
+@main.command("topic-overview")
+@click.argument("topic")
+@click.option("--working-group", "-w")
+@click.pass_context
+def topic_overview_cmd(ctx: click.Context, topic: str, working_group: str | None) -> None:
+    """Aggregated state of discussion for a topic."""
+    from wgtracker.queries import topic_overview
+
+    with session_scope(ctx.obj["factory"]) as session:
+        ov = topic_overview(session, topic, working_group=working_group)
+        click.echo(f"Topic   : {ov['topic']}  ({ov['thread_count']} threads)")
+        click.echo(f"By status   : {ov['by_status']}")
+        click.echo(f"By consensus: {ov['by_consensus']}")
+        click.echo("Recent  :")
+        _print_threads(cast("list[object]", ov["recent"]))
 
 
 @main.command("thread")
@@ -169,14 +236,19 @@ def show_thread_cmd(ctx: click.Context, thread_id: str) -> None:
 
 
 @main.command("drafts")
+@click.option("--topic", "-t")
 @click.option("--working-group", "-w")
 @click.pass_context
-def list_drafts_cmd(ctx: click.Context, working_group: str | None) -> None:
+def list_drafts_cmd(ctx: click.Context, topic: str | None, working_group: str | None) -> None:
     """List referenced drafts with thread counts."""
-    from wgtracker.queries import list_drafts
+    from wgtracker.queries import drafts_for_topic, list_drafts
 
     with session_scope(ctx.obj["factory"]) as session:
-        rows = list_drafts(session, working_group=working_group)
+        rows = (
+            drafts_for_topic(session, topic)
+            if topic
+            else list_drafts(session, working_group=working_group)
+        )
         if not rows:
             click.echo("No drafts found.")
             return
