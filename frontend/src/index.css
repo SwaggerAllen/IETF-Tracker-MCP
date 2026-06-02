@@ -1,0 +1,80 @@
+:root {
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #1d2433;
+  background: #f7f8fa;
+}
+body {
+  margin: 0;
+}
+header {
+  background: #1d2433;
+  color: #fff;
+  padding: 0.75rem 1.25rem;
+}
+header h1 {
+  font-size: 1.1rem;
+  margin: 0;
+}
+nav {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem 1.25rem;
+  border-bottom: 1px solid #e2e6ec;
+  background: #fff;
+}
+nav button {
+  border: 1px solid #cdd4de;
+  background: #fff;
+  border-radius: 6px;
+  padding: 0.35rem 0.8rem;
+  cursor: pointer;
+}
+nav button.active {
+  background: #1d2433;
+  color: #fff;
+}
+main {
+  padding: 1.25rem;
+}
+.row {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+.card {
+  background: #fff;
+  border: 1px solid #e2e6ec;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.6rem;
+}
+.card h3 {
+  margin: 0 0 0.3rem;
+  font-size: 0.98rem;
+}
+.meta {
+  color: #5b6472;
+  font-size: 0.82rem;
+}
+.tag {
+  display: inline-block;
+  font-size: 0.72rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 10px;
+  background: #eef1f5;
+  margin-right: 0.3rem;
+}
+a {
+  color: #2563c9;
+}
+button.action {
+  border: 1px solid #cdd4de;
+  background: #fff;
+  border-radius: 6px;
+  padding: 0.35rem 0.7rem;
+  cursor: pointer;
+  margin-right: 0.4rem;
+}
+.error {
+  color: #b00020;
+}
