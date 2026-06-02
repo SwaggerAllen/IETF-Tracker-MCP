@@ -262,18 +262,21 @@ Alembic migration builds from the models and runs up/down. Steps:
 
 → **You verify** threads reconstruct correctly and `archive_url`s resolve. No LLM yet.
 
-**Milestone 2 — LLM + interfaces + deploy:**
-8. Summarization (Sonnet 4.6, Batch, draft-aware) + cost tracking.
-9. Categorization + admin pre-filter (Haiku 4.5, Batch).
-10. Full CLI query interface.
+**Milestone 2 — LLM + interfaces (code complete; deploy/backfill pending live infra):**
+All built behind a mockable batch client and validated offline (Python: 49 tests,
+ruff + mypy strict; frontend: eslint + tsc + vitest + production build).
+8. ✅ Summarization (Sonnet 4.6, Batch, draft-aware) + cost tracking (`llm/`).
+9. ✅ Categorization + heuristic admin pre-filter (Haiku 4.5, Batch).
+10. ✅ Full CLI query interface (`recent`, `participants`, `topic-overview`, `cost`, `--topic`).
+11. ✅ MCP HTTP server (7 tools, source URLs always) — `mcp_server/`, mounted at `/mcp`.
+12. ✅ React SPA debug UI (read + re-trigger) — `frontend/`; activates the `frontend` CI job.
+13. ✅ `wgtracker pipeline` stages wired to real submit/poll/recategorize logic.
 
-→ **You spot-check** summaries on a small MLS sample (accuracy, citations, categorization, cost vs. estimate).
+→ **Spot-check gate (needs live API + archive):** run on a small MLS sample and verify
+summaries, citations, categorization, and cost vs. estimate before backfill.
 
-11. MCP HTTP server (7 tools, source URLs always).
-12. React SPA debug UI (read + re-trigger) — activates the `frontend` CI job.
-13. Wire `wgtracker pipeline` stages to real logic; first DO deploy (set DO + GitHub secrets).
-14. Deploy to DO App Platform; validate small sample end-to-end.
-15. Full backfill of configured WGs (only after validation; within budget).
+14. ⏳ First DO deploy (set DO + GitHub secrets; create the App); validate small sample end-to-end.
+15. ⏳ Full backfill of configured WGs (only after validation; within budget).
 
 ## 14. Open questions / risks
 
