@@ -1,0 +1,73 @@
+From nobody@ietf.org Mon Jan 06 10:00:00 2025
+Message-ID: <msg1@example.com>
+From: Alice Example <alice@example.com>
+To: mls@ietf.org
+Subject: Extensions format
+Date: Mon, 06 Jan 2025 10:00:00 +0000
+Archived-At: <https://mailarchive.ietf.org/arch/msg/mls/AAA1>
+
+I propose we revise the extensions format in draft-ietf-mls-extensions-04.
+See also RFC 9420 for context.
+
+--
+Alice
+Example Corp
+
+From nobody@ietf.org Mon Jan 06 11:00:00 2025
+Message-ID: <msg2@example.com>
+In-Reply-To: <msg1@example.com>
+References: <msg1@example.com>
+From: Bob Builder <bob@example.com>
+To: mls@ietf.org
+Subject: Re: Extensions format
+Date: Mon, 06 Jan 2025 11:00:00 +0000
+Archived-At: <https://mailarchive.ietf.org/arch/msg/mls/AAA2>
+
+On Mon, 06 Jan 2025, Alice Example wrote:
+> I propose we revise the extensions format in draft-ietf-mls-extensions-04.
+> See also RFC 9420 for context.
+
+I disagree with draft-ietf-mls-extensions-04; draft-ietf-mls-extensions-03 was cleaner.
+
+--
+Bob
+
+From nobody@ietf.org Tue Jan 07 09:00:00 2025
+Message-ID: <msg3@example.com>
+References: <msg1@example.com> <msg2@example.com>
+From: Carol <carol@example.com>
+To: mls@ietf.org
+Subject: Re: Extensions format
+Date: Tue, 07 Jan 2025 09:00:00 +0000
+Archived-At: <https://mailarchive.ietf.org/arch/msg/mls/AAA3>
+
++1 to Bob.
+
+From nobody@ietf.org Wed Feb 12 08:00:00 2025
+Message-ID: <pq1@example.com>
+From: Dave <dave@example.com>
+To: mls@ietf.org
+Subject: [MLS] Post-quantum hybrid
+Date: Wed, 12 Feb 2025 08:00:00 +0000
+Archived-At: <https://mailarchive.ietf.org/arch/msg/mls/BBB1>
+
+Should we adopt a hybrid PQ scheme?
+See https://datatracker.ietf.org/doc/draft-ietf-mls-extensions/ for the current text.
+
+From nobody@ietf.org Thu Feb 13 08:00:00 2025
+Message-ID: <pq2@example.com>
+From: Erin <erin@example.com>
+To: mls@ietf.org
+Subject: Re: [MLS] Post-quantum hybrid
+Date: Thu, 13 Feb 2025 08:00:00 +0000
+Archived-At: <https://mailarchive.ietf.org/arch/msg/mls/BBB2>
+
+I think hybrid is the way to go.
+
+From nobody@ietf.org Fri Feb 14 08:00:00 2025
+From: Nobody <nobody@example.com>
+To: mls@ietf.org
+Subject: No message id here
+Date: Fri, 14 Feb 2025 08:00:00 +0000
+
+This message has no Message-ID and should be skipped.

@@ -248,8 +248,11 @@ CLI stub; CI quality gates (ruff + mypy-strict + pytest, green locally); GitHub 
 `deploy.yml` (DO App Platform via `doctl`) and `pipeline.yml` (cron + workflow_dispatch);
 `.do/app.yaml` (no worker); multi-stage `Dockerfile` target; `config.yaml`.
 
-**Milestone 1 — verifiable, zero API cost** (stop for your spot-check):
-1. Scaffold (pyproject, config loader, structlog, settings). *(partially done in M0)*
+**Milestone 1 — verifiable, zero API cost (done — awaiting your spot-check):**
+Implemented as a Python package runnable offline against SQLite from a local mbox
+(production uses Postgres). 30 tests pass; ruff + mypy(strict) green; the initial
+Alembic migration builds from the models and runs up/down. Steps:
+1. Scaffold (pyproject, config loader, structlog, settings).
 2. Schema + Alembic migrations (all tables + `batch_jobs`).
 3. Ingestion: mbox export client + RFC 5322/MIME parse + dedupe.
 4. Thread reconstruction (+ heuristic fallback).

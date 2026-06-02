@@ -11,7 +11,7 @@ def test_cli_help() -> None:
     assert "Working Group Activity Tracker" in result.output
 
 
-def test_pipeline_ingest_stub() -> None:
-    result = CliRunner().invoke(main, ["pipeline", "ingest"])
+def test_pipeline_poll_stub() -> None:
+    result = CliRunner().invoke(main, ["pipeline", "poll"])
     assert result.exit_code == 0
     assert "not yet implemented" in result.output
